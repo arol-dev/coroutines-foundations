@@ -3,7 +3,13 @@
  */
 package org.example
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.EmptyCoroutineContext
@@ -27,15 +33,20 @@ class App {
     }
 }
 
+@OptIn(DelicateCoroutinesApi::class)
 fun main() {
     val app = App()
 
-    CoroutineScope(EmptyCoroutineContext).launch {
+    val job = GlobalScope.launch(Dispatchers.Main) {
         val user = app.doLogin("username", "password")
-        val friends = app.requestCurrentFriends(user)
-        val suggestedFriends = app.requestSuggestedFriends(user)
+        val friends = async { app.requestCurrentFriends(user) }
+        val suggestedFriends = async { app.requestSuggestedFriends(user) }
+        val friendAndSuggestedFriend = awaitAll(friends, suggestedFriends)
         val userWithFriendsAndSuggestedFriends =
-            user.copy(friends = friends + suggestedFriends)
+            user.copy(friends = friendAndSuggestedFriend.flatten())
         println(userWithFriendsAndSuggestedFriends)
+    }
+    runBlocking {
+        job.join()
     }
 }
