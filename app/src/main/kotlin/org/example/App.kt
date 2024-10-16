@@ -3,12 +3,34 @@
  */
 package org.example
 
+data class User(val username: String, val friends: List<User> = emptyList())
+
 class App {
-    fun greeting() {
-        println("Hello world!")
+    fun doLogin(username: String, password: String, callback: (User) -> Unit) {
+        // Server request
+        callback(User(username))
+    }
+
+    fun requestCurrentFriends(user: User, callback: (List<User>) -> Unit) {
+        // Server request
+        callback(listOf(User("1"), User("2")))
+    }
+
+    fun requestSuggestedFriends(user: User, callback: (List<User>) -> Unit) {
+        // Server request
+        callback(listOf(User("3"), User("4")))
     }
 }
 
 fun main() {
-    App().greeting()
+    val app = App()
+    app.doLogin("username", "password") { user ->
+        app.requestCurrentFriends(user) { friends ->
+            app.requestSuggestedFriends(user) { suggestedFriends ->
+                val userWithFriendsAndSuggestedFriends =
+                    user.copy(friends = friends + suggestedFriends)
+                println(userWithFriendsAndSuggestedFriends)
+            }
+        }
+    }
 }
