@@ -4,9 +4,9 @@
 package org.example
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlin.coroutines.EmptyCoroutineContext
 
 data class User(val username: String, val friends: List<User> = emptyList())
 
@@ -29,10 +29,13 @@ class App {
 
 fun main() {
     val app = App()
-    val user = app.doLogin("username", "password")
-    val friends = app.requestCurrentFriends(user)
-    val suggestedFriends = app.requestSuggestedFriends(user)
-    val userWithFriendsAndSuggestedFriends =
-        user.copy(friends = friends + suggestedFriends)
-    println(userWithFriendsAndSuggestedFriends)
+
+    CoroutineScope(EmptyCoroutineContext).launch {
+        val user = app.doLogin("username", "password")
+        val friends = app.requestCurrentFriends(user)
+        val suggestedFriends = app.requestSuggestedFriends(user)
+        val userWithFriendsAndSuggestedFriends =
+            user.copy(friends = friends + suggestedFriends)
+        println(userWithFriendsAndSuggestedFriends)
+    }
 }
