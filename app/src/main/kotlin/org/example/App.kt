@@ -8,8 +8,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.coroutines.EmptyCoroutineContext
@@ -37,7 +39,8 @@ class App {
 fun main() {
     val app = App()
 
-    val job = GlobalScope.launch(Dispatchers.Main) {
+    val coroutineScope = MainScope()
+    coroutineScope.launch {
         val user = app.doLogin("username", "password")
         val friends = async { app.requestCurrentFriends(user) }
         val suggestedFriends = async { app.requestSuggestedFriends(user) }
@@ -46,7 +49,8 @@ fun main() {
             user.copy(friends = friendAndSuggestedFriend.flatten())
         println(userWithFriendsAndSuggestedFriends)
     }
+
     runBlocking {
-        job.join()
+        coroutineScope.coroutineContext.job.join()
     }
 }
