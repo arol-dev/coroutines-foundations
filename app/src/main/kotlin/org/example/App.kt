@@ -3,34 +3,36 @@
  */
 package org.example
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+
 data class User(val username: String, val friends: List<User> = emptyList())
 
 class App {
-    fun doLogin(username: String, password: String, callback: (User) -> Unit) {
+    suspend fun doLogin(username: String, password: String): User {
         // Server request
-        callback(User(username))
+        return User(username)
     }
 
-    fun requestCurrentFriends(user: User, callback: (List<User>) -> Unit) {
+    suspend fun requestCurrentFriends(user: User): List<User> {
         // Server request
-        callback(listOf(User("1"), User("2")))
+        return listOf(User("1"), User("2"))
     }
 
-    fun requestSuggestedFriends(user: User, callback: (List<User>) -> Unit) {
+    suspend fun requestSuggestedFriends(user: User): List<User> {
         // Server request
-        callback(listOf(User("3"), User("4")))
+        return listOf(User("3"), User("4"))
     }
 }
 
 fun main() {
     val app = App()
-    app.doLogin("username", "password") { user ->
-        app.requestCurrentFriends(user) { friends ->
-            app.requestSuggestedFriends(user) { suggestedFriends ->
-                val userWithFriendsAndSuggestedFriends =
-                    user.copy(friends = friends + suggestedFriends)
-                println(userWithFriendsAndSuggestedFriends)
-            }
-        }
-    }
+    val user = app.doLogin("username", "password")
+    val friends = app.requestCurrentFriends(user)
+    val suggestedFriends = app.requestSuggestedFriends(user)
+    val userWithFriendsAndSuggestedFriends =
+        user.copy(friends = friends + suggestedFriends)
+    println(userWithFriendsAndSuggestedFriends)
 }
