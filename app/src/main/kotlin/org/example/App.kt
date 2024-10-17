@@ -3,20 +3,23 @@
  */
 package org.example
 
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.lastOrNull
 
 data class User(val username: String, val friends: List<User> = emptyList())
+
+class InMemoryDatabase {
+    private val _userFlow = MutableSharedFlow<User>()
+    val userFlow: Flow<User> = _userFlow
+
+    suspend fun setCurrentUser(user: User) = _userFlow.emit(user)
+
+    suspend fun getCurrentUser(): User? {
+        return _userFlow.lastOrNull()
+    }
+}
 
 class App {
     suspend fun doLogin(username: String, password: String): User {
@@ -38,16 +41,30 @@ class App {
 @OptIn(DelicateCoroutinesApi::class)
 fun main() {
     val app = App()
+    val inMemoryDatabase = InMemoryDatabase()
 
-    val coroutineScope = MainScope()
+    val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     coroutineScope.launch {
-        val user = app.doLogin("username", "password")
-        val friends = async { app.requestCurrentFriends(user) }
-        val suggestedFriends = async { app.requestSuggestedFriends(user) }
-        val friendAndSuggestedFriend = awaitAll(friends, suggestedFriends)
-        val userWithFriendsAndSuggestedFriends =
-            user.copy(friends = friendAndSuggestedFriend.flatten())
-        println(userWithFriendsAndSuggestedFriends)
+        inMemoryDatabase.getCurrentUser()?.let { currentUser ->
+            println("Current user: $currentUser")
+        }
+    }
+
+    coroutineScope.launch {
+        val user1 = app.doLogin("user1", "password")
+        inMemoryDatabase.setCurrentUser(user1)
+        val user2 = app.doLogin("user2", "password")
+        inMemoryDatabase.setCurrentUser(user2)
+        inMemoryDatabase.getCurrentUser()?.let { currentUser ->
+            println("Current user: $currentUser")
+        }
+    }
+
+    coroutineScope.launch {
+        inMemoryDatabase.userFlow.collect { user ->
+            println("User: $user")
+        }
     }
 
     runBlocking {
