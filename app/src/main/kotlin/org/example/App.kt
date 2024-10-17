@@ -6,7 +6,9 @@ package org.example
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.stateIn
 
 data class User(val username: String, val friends: List<User> = emptyList())
 
@@ -15,13 +17,13 @@ class InMemoryDatabase {
     val userFlow: Flow<User> = _userFlow
 
     suspend fun setCurrentUser(user: User) = _userFlow.emit(user)
-
-    suspend fun getCurrentUser(): User? {
-        return _userFlow.lastOrNull()
-    }
 }
 
-class App {
+class App(inMemoryDatabase: InMemoryDatabase) {
+    val userStateFlow = inMemoryDatabase
+        .userFlow
+        .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.WhileSubscribed(5000), null)
+
     suspend fun doLogin(username: String, password: String): User {
         // Server request
         return User(username)
@@ -40,15 +42,18 @@ class App {
 
 @OptIn(DelicateCoroutinesApi::class)
 fun main() {
-    val app = App()
     val inMemoryDatabase = InMemoryDatabase()
+    val app = App(inMemoryDatabase)
 
     val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     coroutineScope.launch {
-        inMemoryDatabase.getCurrentUser()?.let { currentUser ->
-            println("Current user: $currentUser")
-        }
+        app.userStateFlow.collect()
+    }
+
+    coroutineScope.launch {
+        val currentUser = app.userStateFlow.value
+        println("Current user: $currentUser")
     }
 
     coroutineScope.launch {
@@ -56,9 +61,8 @@ fun main() {
         inMemoryDatabase.setCurrentUser(user1)
         val user2 = app.doLogin("user2", "password")
         inMemoryDatabase.setCurrentUser(user2)
-        inMemoryDatabase.getCurrentUser()?.let { currentUser ->
-            println("Current user: $currentUser")
-        }
+        val currentUser = app.userStateFlow.value
+        println("Current user: $currentUser")
     }
 
     coroutineScope.launch {
