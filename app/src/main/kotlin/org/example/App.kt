@@ -4,17 +4,23 @@
 package org.example
 
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 
 data class User(val username: String, val friends: List<User> = emptyList())
 
 class InMemoryDatabase {
-    private val _userFlow = MutableSharedFlow<User>()
-    val userFlow: Flow<User> = _userFlow
+    private val _userFlow = MutableSharedFlow<User>(
+        replay = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val userFlow = _userFlow.asSharedFlow().distinctUntilChanged()
 
     suspend fun setCurrentUser(user: User) = _userFlow.emit(user)
 }
@@ -48,26 +54,25 @@ fun main() {
     val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     coroutineScope.launch {
-        app.userStateFlow.collect()
+        var counter = 1
+        while (true) {
+            delay(500)
+            val user = app.doLogin("user $counter", "password")
+            inMemoryDatabase.setCurrentUser(user)
+            println("Emitted: $user")
+            inMemoryDatabase.setCurrentUser(user)
+            println("Emitted: $user")
+            counter++
+        }
     }
 
     coroutineScope.launch {
-        val currentUser = app.userStateFlow.value
-        println("Current user: $currentUser")
-    }
-
-    coroutineScope.launch {
-        val user1 = app.doLogin("user1", "password")
-        inMemoryDatabase.setCurrentUser(user1)
-        val user2 = app.doLogin("user2", "password")
-        inMemoryDatabase.setCurrentUser(user2)
-        val currentUser = app.userStateFlow.value
-        println("Current user: $currentUser")
-    }
-
-    coroutineScope.launch {
-        inMemoryDatabase.userFlow.collect { user ->
-            println("User: $user")
+        delay(1500)
+        app
+            .userStateFlow
+            .collect { user ->
+            delay(1000)
+            println("Collected: $user")
         }
     }
 
