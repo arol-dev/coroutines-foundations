@@ -5,66 +5,43 @@ package org.example
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
 data class User(val username: String, val friends: List<User> = emptyList())
 
 class InMemoryDatabase {
-    val _userChannerl = Channel<User>(
-        capacity = Channel.BUFFERED
-    )
-
-    suspend fun setCurrentUser(user: User) = _userChannerl.send(user)
+    fun addUser(username: String, callback: (User) -> Unit) {
+        callback(User(username, emptyList()))
+    }
 }
 
-class App(inMemoryDatabase: InMemoryDatabase) {
-    suspend fun doLogin(username: String, password: String): User {
-        // Server request
-        return User(username)
-    }
-
-    suspend fun requestCurrentFriends(user: User): List<User> {
-        // Server request
-        return listOf(User("1"), User("2"))
-    }
-
-    suspend fun requestSuggestedFriends(user: User): List<User> {
-        // Server request
-        return listOf(User("3"), User("4"))
+class App(private val inMemoryDatabase: InMemoryDatabase) {
+    val usersFlow: Flow<User> = callbackFlow {
+        var counter = 1
+        while (true) {
+            delay(500)
+            inMemoryDatabase.addUser("user $counter", { user ->
+                val channelResult = trySend(user)
+                if (channelResult.isSuccess) {
+                    println("Emitted: $user")
+                }
+                counter++
+            })
+        }
     }
 }
 
 @OptIn(DelicateCoroutinesApi::class)
 fun main() {
-    val inMemoryDatabase = InMemoryDatabase()
-    val app = App(inMemoryDatabase)
-
-    val coroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    coroutineScope.launch {
-        var counter = 1
-        while (!inMemoryDatabase._userChannerl.isClosedForSend) {
-            delay(500)
-            val user = app.doLogin("user $counter", "password")
-            inMemoryDatabase.setCurrentUser(user)
-            println("Emitted: $user")
-            inMemoryDatabase.setCurrentUser(user)
-            println("Emitted: $user")
-            counter++
-            if (counter == 5) {
-                inMemoryDatabase._userChannerl.close()
+    runBlocking {
+        val inMemoryDatabase = InMemoryDatabase()
+        val app = App(inMemoryDatabase)
+        launch(Dispatchers.Default) {
+            app.usersFlow.collect { user ->
+                delay(500)
+                println("Collected: $user")
             }
         }
-    }
-
-    coroutineScope.launch {
-        delay(1500)
-        for (user in inMemoryDatabase._userChannerl) {
-            delay(1000)
-            println("Collected: $user")
-        }
-    }
-
-    runBlocking {
-        coroutineScope.coroutineContext.job.join()
     }
 }
