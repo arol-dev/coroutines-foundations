@@ -4,32 +4,19 @@
 package org.example
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.channels.Channel
 
 data class User(val username: String, val friends: List<User> = emptyList())
 
 class InMemoryDatabase {
-    private val _userFlow = MutableSharedFlow<User>(
-        replay = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    val _userChannerl = Channel<User>(
+        capacity = Channel.BUFFERED
     )
-    val userFlow = _userFlow.asSharedFlow().distinctUntilChanged()
 
-    suspend fun setCurrentUser(user: User) = _userFlow.emit(user)
+    suspend fun setCurrentUser(user: User) = _userChannerl.send(user)
 }
 
 class App(inMemoryDatabase: InMemoryDatabase) {
-    val userStateFlow = inMemoryDatabase
-        .userFlow
-        .stateIn(CoroutineScope(Dispatchers.IO), SharingStarted.WhileSubscribed(5000), null)
-
     suspend fun doLogin(username: String, password: String): User {
         // Server request
         return User(username)
@@ -55,7 +42,7 @@ fun main() {
 
     coroutineScope.launch {
         var counter = 1
-        while (true) {
+        while (!inMemoryDatabase._userChannerl.isClosedForSend) {
             delay(500)
             val user = app.doLogin("user $counter", "password")
             inMemoryDatabase.setCurrentUser(user)
@@ -63,14 +50,15 @@ fun main() {
             inMemoryDatabase.setCurrentUser(user)
             println("Emitted: $user")
             counter++
+            if (counter == 5) {
+                inMemoryDatabase._userChannerl.close()
+            }
         }
     }
 
     coroutineScope.launch {
         delay(1500)
-        app
-            .userStateFlow
-            .collect { user ->
+        for (user in inMemoryDatabase._userChannerl) {
             delay(1000)
             println("Collected: $user")
         }
